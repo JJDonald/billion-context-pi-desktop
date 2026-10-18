@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Context compression</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        padding: calc(var(--pi-plugin-titlebar-height, 0px) + 14px) 16px 20px;
+        font: 13px/1.5 system-ui, sans-serif;
+        color: CanvasText;
+        background: Canvas;
+      }
+      h1 {
+        font-size: 14px;
+        font-weight: 650;
+        margin: 0 0 2px;
+      }
+      .sub {
+        color: GrayText;
+        margin-bottom: 16px;
+      }
+      h2 {
+        font-size: 12px;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: GrayText;
+        margin: 20px 0 8px;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 8px;
+      }
+      .card {
+        border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+      .card .k {
+        color: GrayText;
+        font-size: 11px;
+      }
+      .card .v {
+        font-size: 19px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        margin-top: 2px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 6px 8px 6px 0;
+        border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+        vertical-align: top;
+      }
+      th {
+        color: GrayText;
+        font-weight: 500;
+        font-size: 11px;
+      }
+      td.topic {
+        color: GrayText;
+        max-width: 320px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .empty {
+        color: GrayText;
+        padding: 10px 0;
+      }
+      pre {
+        margin: 0;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: color-mix(in srgb, CanvasText 6%, transparent);
+        font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 260px;
+        overflow: auto;
+      }
+      .path {
+        font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: GrayText;
+        word-break: break-all;
+      }
+      button {
+        font: inherit;
+        padding: 4px 12px;
+        border-radius: 6px;
+        border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      }
+      button:hover {
+        background: color-mix(in srgb, CanvasText 8%, transparent);
+      }
+      .err {
+        color: tomato;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="row" style="justify-content: space-between">
+      <div>
+        <h1>上下文压缩</h1>
+        <div class="sub">模型自己把长历史折叠成摘要，会话不再撞上下文窗口。</div>
+      </div>
+      <button id="reload" type="button">刷新</button>
+    </div>
+
+    <div id="body"><div class="empty">加载中…</div></div>
+
+    <script>
+      const body = document.getElementById("body");
+
+      function esc(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function card(key, value) {
+        return `<div class="card"><div class="k">${esc(key)}</div><div class="v">${esc(value)}</div></div>`;
+      }
+
+      function render(data) {
+        if (data.error) {
+          body.innerHTML = `<div class="empty err">${esc(data.error)}</div>`;
+          return;
+        }
+
+        const current = data.current;
+        const blocks = (current && current.blocks) || [];
+        const parts = [];
+
+        parts.push('<h2>当前会话</h2>');
+        if (!current) {
+          parts.push(
+            '<div class="empty">还没有折叠记录。上下文填满时 Agent 会自己调用 compress。</div>',
+          );
+        } else if (current.unreadable) {
+          parts.push(`<div class="empty err">状态文件读不出来：${esc(current.unreadable)}</div>`);
+        } else {
+          parts.push('<div class="cards">');
+          parts.push(card("活跃折叠块", blocks.length));
+          parts.push(card("本会话折叠次数", current.folds));
+          parts.push(card("已回收 token", current.reclaimed));
+          parts.push(card("追踪消息数", current.tracked));
+          parts.push("</div>");
+
+          if (blocks.length) {
+            parts.push('<h2>折叠范围</h2><table><thead><tr><th>块</th><th>层级</th><th>消息数</th><th>摘要长度</th><th>主题</th></tr></thead><tbody>');
+            for (const b of blocks) {
+              parts.push(
+                `<tr><td>${esc(b.id)}</td><td>T${esc(b.tier)}</td><td>${esc(b.messages)}</td><td>${esc(b.summaryChars)}</td><td class="topic">${esc(b.topic || "—")}</td></tr>`,
+              );
+            }
+            parts.push("</tbody></table>");
+          } else {
+            parts.push('<div class="empty">这个会话还没有折叠过任何范围。</div>');
+          }
+        }
+
+        parts.push('<h2>配置</h2><table><tbody>');
+        parts.push(
+          `<tr><th>状态</th><td>${data.enabled ? "已启用" : "已关闭（enabled: false）"}</td></tr>`,
+        );
+        parts.push(
+          `<tr><th>上下文上限</th><td>${data.contextLimit ? esc(data.contextLimit.toLocaleString()) + " tokens（插件覆盖）" : "跟随模型自身"}</td></tr>`,
+        );
+        parts.push(`<tr><th>共记录</th><td>${esc(data.sessions)} 个会话</td></tr>`);
+        parts.push("</tbody></table>");
+        parts.push(`<div class="path" style="margin-top: 6px">${esc(data.stateDir)}</div>`);
+
+        parts.push('<h2>最近日志</h2>');
+        const log = data.log || [];
+        parts.push(
+          log.length
+            ? `<pre>${esc(log.join("\n"))}</pre>`
+            : '<div class="empty">日志里还没有压缩记录。</div>',
+        );
+
+        body.innerHTML = parts.join("");
+      }
+
+      async function load() {
+        body.innerHTML = '<div class="empty">加载中…</div>';
+        try {
+          const data = await window.pluginBridge.invoke("status.get", {});
+          render(data || {});
+        } catch (err) {
+          body.innerHTML = `<div class="empty err">${esc(err && err.message ? err.message : err)}</div>`;
+        }
+      }
+
+      document.getElementById("reload").addEventListener("click", () => void load());
+      void load();
+    </script>
+  </body>
+</html>

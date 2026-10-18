@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "id": "local.billion-context",
+  "name": "Billion Context",
+  "version": "0.2.0",
+  "description": "Model-driven context compression: the model folds long histories into its own summaries, so one session keeps going instead of dying at the context window.",
+  "author": "port of ranxianglei/billion-context (MIT)",
+  "license": "MIT",
+  "categories": [
+    "developer-tools",
+    "productivity"
+  ],
+  "i18n": {
+    "en": {
+      "name": "Billion Context",
+      "description": "Model-driven context compression: the model folds long histories into its own summaries, so one session keeps going instead of dying at the context window.",
+      "safetyNotes": "Bundles billion-context-pi 0.1.83 (MIT) and runs it unmodified in the agent extension host, with the same trust as the agent. Adds compress / decompress / search_context / acp_status tools and /acp commands to the model. Summaries are written by the model. Fold state is stored under ~/.pi/agent/acp-desktop/. Nothing leaves the machine except the model calls you already make. Upstream's self-update is disabled; fixes arrive when the vendored copy is updated."
+    },
+    "zh-CN": {
+      "name": "Billion Context",
+      "description": "模型驱动的上下文压缩：模型自己把长历史折叠成摘要，一个会话能一直跑下去，而不是在上下文窗口处死掉。",
+      "safetyNotes": "内置 billion-context-pi 0.1.83（MIT），原样运行在 Agent 扩展宿主内，信任级别与 Agent 相同。会向模型注册 compress / decompress / search_context / acp_status 工具与 /acp 命令。摘要是模型写的。折叠状态存在 ~/.pi/agent/acp-desktop/ 下。除你本来就会发出的模型请求外不上传任何东西。上游自更新已关闭，靠更新内置副本来获取修复。"
+    }
+  },
+  "safetyNotes": "Bundles billion-context-pi 0.1.83 (MIT) and runs it unmodified in the agent extension host, with the same trust as the agent. Adds compress / decompress / search_context / acp_status tools and /acp commands to the model. Summaries are written by the model. Fold state is stored under ~/.pi/agent/acp-desktop/. Nothing leaves the machine except the model calls you already make. Upstream's self-update is disabled; fixes arrive when the vendored copy is updated.",
+  "main": "main.js",
+  "permissions": [
+    "agent.extension",
+    "ui.view"
+  ],
+  "contributes": {
+    "agentExtensions": [
+      "extension/entry.mjs"
+    ],
+    "views": [
+      {
+        "id": "status",
+        "title": {
+          "en": "Context compression",
+          "zh-CN": "上下文压缩"
+        },
+        "icon": "workflow",
+        "entry": "views/status.html",
+        "order": 60
+      }
+    ],
+    "commands": [
+      {
+        "id": "billion-context.open",
+        "title": "Billion Context: Context compression",
+        "keywords": [
+          "context",
+          "compress",
+          "acp",
+          "tokens",
+          "压缩"
+        ]
+      }
+    ],
+    "settings": [
+      {
+        "key": "enabled",
+        "title": "Enable compression",
+        "type": "boolean",
+        "default": true
+      },
+      {
+        "key": "modelContextLimit",
+        "title": "Context limit override (tokens, 0 = use the model's own)",
+        "type": "number",
+        "default": 0
+      }
+    ]
+  },
+  "engines": {
+    "piDesktop": ">=0.14.0"
+  },
+  "activationEvents": [
+    "onStartup"
+  ]
+}

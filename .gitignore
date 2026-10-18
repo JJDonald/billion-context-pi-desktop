@@ -1,0 +1,7 @@
+node_modules/
+dist/
+!vendor/billion-context-pi/dist/
+*.piplug
+*.tgz
+.DS_Store
+Thumbs.db
