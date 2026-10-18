@@ -1,9 +1,6 @@
 MIT License
 
-Copyright (c) 2026 ranxianglei (billion-context-pi, vendored under
-vendor/billion-context-pi/)
-Copyright (c) 2026 JJDonald (the PI-Desktop port: manifest.json, main.js,
-extension/entry.mjs, views/status.html)
+Copyright (c) 2026 ranxianglei and JJDonald
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
