@@ -101,5 +101,8 @@ vendor/billion-context-pi/    billion-context-pi@0.1.83, MIT, unmodified
 
 ## License
 
-Upstream `billion-context-pi` is MIT; its `LICENSE` is kept in
-`vendor/billion-context-pi/`.
+MIT. The root [LICENSE](LICENSE) covers the whole repository: the port
+(manifest.json, main.js, extension/entry.mjs, views/status.html) is
+Copyright (c) 2026 JJDonald; the vendored billion-context-pi is
+Copyright (c) 2026 ranxianglei. The upstream notice is also kept in place at
+`vendor/billion-context-pi/LICENSE`.
