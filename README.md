@@ -53,6 +53,25 @@ tar xzf billion-context-pi-<version>.tgz -C /tmp \
   && cp -r /tmp/package/{dist,schema,package.json,LICENSE} vendor/billion-context-pi/
 ```
 
+The pin tracks upstream's `master` when a release lags it. `0.1.84-pr.667.485`
+is the `release v0.1.84` branch build: it carries the meter-honesty fixes
+landed after `v0.1.83` (host tree-sum rejection when the latest turn has no
+fresh provider usage, and the learned k̂ calibration). npm `latest` was still
+`0.1.83` at the time of the swap; re-vendor from the stable release once it
+ships.
+
+## Why this package and not billion-context
+
+The main [billion-context](https://github.com/ranxianglei/billion-context)
+project also ships a pi lane, and it is the better-maintained line. It does not
+work on PI-Desktop. Its pi lane routes model traffic through a proxy it spawns
+and patches `globalThis.fetch` to reach it; PI-Desktop makes its model calls
+outside the extension host, so that interception never sees a request. The
+tools register successfully, but the first call answers
+`unknown plugin conversation` (404) because nothing ever arrived at the proxy.
+`billion-context-pi` folds in-process and needs no proxy, which is why it is the
+vendored lane here.
+
 ## Panel and settings
 
 The **Context compression** view shows the current session's active folds,
@@ -96,7 +115,7 @@ manifest.json                 manifest (agentExtensions + views + settings)
 main.js                       settings → acp.json, panel queries, /billion-context.open
 extension/entry.mjs           host recognition + durable fold state
 views/status.html             the Context compression panel
-vendor/billion-context-pi/    billion-context-pi@0.1.83, MIT, unmodified
+vendor/billion-context-pi/    billion-context-pi@0.1.84-pr.667.485, MIT, unmodified
 ```
 
 ## License

@@ -20,6 +20,14 @@
 // all three get the adapter context. Everything else is upstream: the vendored
 // copy is pinned, upstream's self-update stays off (it would npm-install over
 // files inside the installed plugin), and fixes arrive by re-vendoring.
+//
+// Why not the main billion-context project: its pi lane routes model traffic
+// through a proxy it spawns and patches `globalThis.fetch` to reach it.
+// PI-Desktop's model calls do not originate in the extension host, so that
+// interception never sees them; the tools register but every call answers
+// `unknown plugin conversation` (404) because no request ever arrived at the
+// proxy. billion-context-pi needs no proxy — it folds in-process — so it is the
+// lane that actually works on this host.
 
 import os from "node:os";
 import path from "node:path";

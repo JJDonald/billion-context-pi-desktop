@@ -2,7 +2,7 @@ import {
   SIDECAR_SCHEMA_VERSION,
   __export,
   sidecarProducer
-} from "./chunk-LLFL3CNI.js";
+} from "./chunk-TCNGKF5D.js";
 
 // src/config-dir.ts
 import * as piModule from "@earendil-works/pi-coding-agent";
@@ -13480,14 +13480,24 @@ function createRuntime(adapter) {
     if (ep) ep.reset();
     throttleEpisodes.delete(sid);
   }
-  const tokenScaleStale = /* @__PURE__ */ new Map();
-  function noteTokenScale(sid, stale) {
-    const prev = tokenScaleStale.get(sid);
-    tokenScaleStale.set(sid, stale);
-    return prev !== void 0 && prev !== stale;
+  const SCALE_FLIP_BAND_RATIO = 0.1;
+  const SCALE_FLIP_BAND_MIN = 1e3;
+  const tokenScaleDominant = /* @__PURE__ */ new Map();
+  function noteTokenScale(sid, hostFloor, sentTokens) {
+    const prev = tokenScaleDominant.get(sid);
+    if (prev === void 0) {
+      tokenScaleDominant.set(sid, sentTokens >= hostFloor ? "est" : "host");
+      return false;
+    }
+    const band = Math.max(SCALE_FLIP_BAND_MIN, SCALE_FLIP_BAND_RATIO * Math.max(hostFloor, sentTokens));
+    let dom = prev;
+    if (prev === "est" && hostFloor - sentTokens > band) dom = "host";
+    else if (prev === "host" && sentTokens - hostFloor > band) dom = "est";
+    if (dom !== prev) tokenScaleDominant.set(sid, dom);
+    return dom !== prev;
   }
   function dropTokenScale(sid) {
-    tokenScaleStale.delete(sid);
+    tokenScaleDominant.delete(sid);
   }
   const HOST_USAGE_WINDOW = 4;
   const HOST_USAGE_MIN_SAMPLES = 3;
@@ -13509,6 +13519,76 @@ function createRuntime(adapter) {
   }
   function dropHostUsageSamples(sid) {
     hostUsageSamples.delete(sid);
+  }
+  const KHAT_RING_MAX = 3;
+  const KHAT_MIN_ESTIMATE = 2e3;
+  const KHAT_RATIO_MIN = 0.2;
+  const KHAT_RATIO_MAX = 5;
+  const KHAT_AGREE_FACTOR = 2;
+  const KHAT_CLAMP_MIN = 0.25;
+  const KHAT_CLAMP_MAX = 1;
+  const KHAT_SCALE_SHIFT = 0.1;
+  const khatStates = /* @__PURE__ */ new Map();
+  function khatFor(sid, model) {
+    const st2 = khatStates.get(sid);
+    return st2 && st2.model === model ? st2.published : null;
+  }
+  function noteKhatUsage(sid, model, usageTokens) {
+    let st2 = khatStates.get(sid);
+    let scaleChanged = false;
+    if (!st2) {
+      st2 = { model, pending: null, ring: [], published: null };
+      khatStates.set(sid, st2);
+    } else if (st2.model !== model) {
+      const prevFactor = st2.published ?? 1;
+      if (1 - prevFactor > KHAT_SCALE_SHIFT) scaleChanged = true;
+      st2 = { model, pending: null, ring: [], published: null };
+      khatStates.set(sid, st2);
+    }
+    const before = st2.published;
+    const pending = st2.pending;
+    st2.pending = null;
+    if (pending && pending.model === model && pending.est >= KHAT_MIN_ESTIMATE && usageTokens > 0) {
+      const ratio = usageTokens / pending.est;
+      if (ratio >= KHAT_RATIO_MIN && ratio <= KHAT_RATIO_MAX) {
+        const sample = Math.min(Math.max(ratio, KHAT_CLAMP_MIN), KHAT_CLAMP_MAX);
+        if (st2.published !== null) {
+          if (sample / st2.published > KHAT_AGREE_FACTOR || st2.published / sample > KHAT_AGREE_FACTOR) {
+            st2.ring = [sample];
+            st2.published = null;
+          }
+        } else {
+          st2.ring.push(sample);
+          if (st2.ring.length > KHAT_RING_MAX) st2.ring.shift();
+          for (let i = 0; i < st2.ring.length && st2.published === null; i++) {
+            for (let j2 = i + 1; j2 < st2.ring.length; j2++) {
+              const a = st2.ring[i];
+              const b2 = st2.ring[j2];
+              if (a / b2 <= KHAT_AGREE_FACTOR && b2 / a <= KHAT_AGREE_FACTOR) {
+                st2.published = (a + b2) / 2;
+                st2.ring = [st2.published];
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+    const factorBefore = before ?? 1;
+    const factorAfter = st2.published ?? 1;
+    if (Math.abs(factorBefore - factorAfter) > KHAT_SCALE_SHIFT) scaleChanged = true;
+    return { khat: st2.published, scaleChanged };
+  }
+  function setKhatPending(sid, model, estimate) {
+    const st2 = khatStates.get(sid);
+    if (!st2 || st2.model !== model) {
+      khatStates.set(sid, { model, pending: { est: estimate, model }, ring: [], published: null });
+      return;
+    }
+    st2.pending = { est: estimate, model };
+  }
+  function dropKhat(sid) {
+    khatStates.delete(sid);
   }
   const sizeDivergenceStreaks = /* @__PURE__ */ new Map();
   function noteSizeDivergence(sid, divergent) {
@@ -13740,7 +13820,7 @@ function createRuntime(adapter) {
     return promptsRef;
   }, setPrompts: (p) => {
     promptsRef = p;
-  }, markNudgeShown, nudgeShownFor, nudgeShownTokensFor, clearNudgeTracking, clearNudgeTokenStamps, markNudgeRecorded, nudgeRecordedFor, noteCompressOutcomes, compressRetryCappedFor, clearCompressRetryTracking, liveContextLimit, configFor, reasoningDropFor, reloadConfig, stateFor, save, deriveChildState: deriveChild, acquireLock, overflowFor, overflowDrop, noteSentViewCount, peekSentViewCount, dropSentViewCount, dropProjectionCache, noteDeadCompress, clearDeadCompress, throttleFor, throttleDrop, noteTokenScale, dropTokenScale, noteHostUsage, dropHostUsageSamples, noteSizeDivergence, dropSizeDivergence, noteTerminalEscape, dropTerminalEscape, noteTruncationSkipped, dropTruncationSkipped, stripImagesFor };
+  }, markNudgeShown, nudgeShownFor, nudgeShownTokensFor, clearNudgeTracking, clearNudgeTokenStamps, markNudgeRecorded, nudgeRecordedFor, noteCompressOutcomes, compressRetryCappedFor, clearCompressRetryTracking, liveContextLimit, configFor, reasoningDropFor, reloadConfig, stateFor, save, deriveChildState: deriveChild, acquireLock, overflowFor, overflowDrop, noteSentViewCount, peekSentViewCount, dropSentViewCount, dropProjectionCache, noteDeadCompress, clearDeadCompress, throttleFor, throttleDrop, noteTokenScale, dropTokenScale, noteKhatUsage, khatFor, setKhatPending, dropKhat, noteHostUsage, dropHostUsageSamples, noteSizeDivergence, dropSizeDivergence, noteTerminalEscape, dropTerminalEscape, noteTruncationSkipped, dropTruncationSkipped, stripImagesFor };
 }
 
 // node_modules/typebox/build/system/memory/memory.mjs
@@ -19207,7 +19287,7 @@ function resolveActivePack(adapter, cwd, provider, modelId, resolver) {
 }
 var HOST_VERSION = (() => {
   try {
-    return "0.1.83";
+    return "0.1.84";
   } catch {
     return "dev";
   }
@@ -19323,26 +19403,37 @@ function readToolSurfaceWithPacks(cwd) {
 }
 
 // src/floor-stale.ts
+function usageTotal(u) {
+  if (!u) return 0;
+  return (u.totalTokens ?? 0) || (u.input ?? 0) + (u.output ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
+}
 function validAnchorUsage(u) {
-  if (!u) return false;
-  const total = (u.totalTokens ?? 0) || (u.input ?? 0) + (u.output ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
-  return total > 0;
+  return usageTotal(u) > 0;
+}
+function isFreshAnchor(m2) {
+  return m2.role === "assistant" && m2.stopReason !== "aborted" && m2.stopReason !== "error" && validAnchorUsage(m2.usage);
 }
 function scanEntries(entries) {
   let lastUsageIdx = -1;
   let lastCompressIdx = -1;
+  let lastAssistantIdx = -1;
+  let lastUsageTotal = 0;
   const compressIdxByCallId = /* @__PURE__ */ new Map();
   for (let i = 0; i < entries.length; i++) {
     const m2 = entries[i].message;
     if (!m2) continue;
-    if (m2.role === "assistant" && m2.stopReason !== "aborted" && m2.stopReason !== "error" && validAnchorUsage(m2.usage)) {
-      lastUsageIdx = i;
+    if (m2.role === "assistant") {
+      lastAssistantIdx = i;
+      if (isFreshAnchor(m2)) {
+        lastUsageIdx = i;
+        lastUsageTotal = usageTotal(m2.usage);
+      }
     } else if (m2.role === "toolResult" && m2.toolName === "compress" && m2.toolCallId !== void 0 && m2.isError !== true && isCompressSuccessText(extractText(m2.content))) {
       lastCompressIdx = i;
       compressIdxByCallId.set(m2.toolCallId, i);
     }
   }
-  return { lastUsageIdx, lastCompressIdx, compressIdxByCallId };
+  return { lastUsageIdx, lastCompressIdx, compressIdxByCallId, lastAssistantIdx, lastUsageTotal };
 }
 function usageAnchorPredatesCompression(entries) {
   const scan = scanEntries(entries);
@@ -19358,7 +19449,9 @@ function compressionAnchorStaleness(entries, blocks, countTokens) {
     const saved = (block.compressedTokens ?? 0) - countTokens(block.summary ?? "");
     netReclaimed += saved > 0 ? saved : 0;
   }
-  return { predates: scan.lastCompressIdx > scan.lastUsageIdx, netReclaimed };
+  const lastAssistant = scan.lastAssistantIdx >= 0 ? entries[scan.lastAssistantIdx] : void 0;
+  const fresh = !!lastAssistant?.message && isFreshAnchor(lastAssistant.message);
+  return { predates: scan.lastCompressIdx > scan.lastUsageIdx, netReclaimed, fresh, lastRealTokens: scan.lastUsageTotal };
 }
 
 // src/delegate-tool.ts
@@ -22670,7 +22763,7 @@ async function statusReport(runtime, ctx) {
   const sentTokens = estimateTokens(coreMessages, coveredIds, imageTokens) + systemPromptTokens;
   const viewSentTokens = adjustedTokenCount(runtime.core, coreMessages, state, config, sentTokens, imageTokens, systemPromptTokens);
   const turn = runtime.core.processTurn({ messages: coreMessages, state, config, tokenCount: anchorStale ? viewSentTokens : Math.max(viewSentTokens, realUsage?.tokens ?? 0) });
-  const versionStr = "0.1.83" ? `billion-context-pi@${"0.1.83"} \xB7 pack: ${resolveSurfaceMeta(runtime.adapter, ctx?.cwd ?? process.cwd(), ctx?.model?.provider, ctx?.model?.id).pack}` : void 0;
+  const versionStr = "0.1.84" ? `billion-context-pi@${"0.1.84"} \xB7 pack: ${resolveSurfaceMeta(runtime.adapter, ctx?.cwd ?? process.cwd(), ctx?.model?.provider, ctx?.model?.id).pack}` : void 0;
   let text = buildStatusPanel({
     version: versionStr,
     tokenCount: sessionTokens,
@@ -23649,7 +23742,7 @@ async function autoInstallLatest(latest, extDirOverride) {
       "--no-fund",
       "--no-save"
     ];
-    const prevVersion = (await readPackageJson(join12(extDir, "package.json")))?.version ?? "0.1.83";
+    const prevVersion = (await readPackageJson(join12(extDir, "package.json")))?.version ?? "0.1.84";
     const { code, stderr } = await runNpmImpl(installArgs(latest), { cwd: npmDir, timeout: 6e4 });
     if (code !== 0) {
       logWarn("update", {
@@ -23667,7 +23760,7 @@ async function autoInstallLatest(latest, extDirOverride) {
     }
     const verify = await verifyInstall(npmDir, latest);
     if (!verify.ok) {
-      const rollbackTo = SEMVER_RE.test(prevVersion) ? prevVersion : "0.1.83";
+      const rollbackTo = SEMVER_RE.test(prevVersion) ? prevVersion : "0.1.84";
       logWarn("update", { event: "auto-install-verify-failed", latest, reason: verify.reason, rollbackTo });
       const rb = await runNpmImpl(installArgs(rollbackTo), { cwd: npmDir, timeout: 6e4 });
       logInfo("update", { event: "rollback", from: latest, to: rollbackTo, ok: rb.code === 0 });
@@ -23742,7 +23835,7 @@ async function checkForUpdate(autoUpdate, notify) {
     }
     const latest = await fetchLatestVersion(tag);
     if (!latest) return;
-    const current = runtimeVersion ?? "0.1.83";
+    const current = runtimeVersion ?? "0.1.84";
     const hasUpdate = isVersionNewer(latest, current);
     debug.event("update-check", {
       current,
@@ -23953,6 +24046,7 @@ function wireSessionLifecycle(pi, runtime, standDownIfProxied) {
     runtime.throttleFor(ctx.sessionManager.getSessionId()).reset();
     runtime.clearCompressRetryTracking(ctx.sessionManager.getSessionId());
     runtime.dropHostUsageSamples(ctx.sessionManager.getSessionId());
+    runtime.dropKhat(ctx.sessionManager.getSessionId());
     runtime.dropSizeDivergence(ctx.sessionManager.getSessionId());
     runtime.dropTerminalEscape(ctx.sessionManager.getSessionId());
     runtime.dropTruncationSkipped(ctx.sessionManager.getSessionId());
@@ -23964,7 +24058,7 @@ function wireSessionLifecycle(pi, runtime, standDownIfProxied) {
     setDelegatePolicy(DEFAULT_DELEGATE_POLICY);
     const sid = ctx.sessionManager.getSessionId();
     const modelInfo = ctx.model;
-    logInfo("session", { event: "start", sid, cwd: ctx.cwd, debug: runtime.adapter.debug ?? null, version: true ? "0.1.83" : null, model: modelInfo?.id ?? null, modelApi: modelInfo?.api ?? null, contextWindow: modelInfo?.contextWindow ?? null });
+    logInfo("session", { event: "start", sid, cwd: ctx.cwd, debug: runtime.adapter.debug ?? null, version: true ? "0.1.84" : null, model: modelInfo?.id ?? null, modelApi: modelInfo?.api ?? null, contextWindow: modelInfo?.contextWindow ?? null });
     let delegateStoodDown = false;
     try {
       await runtime.reloadConfig(ctx.cwd);
@@ -24027,6 +24121,7 @@ function wireSessionLifecycle(pi, runtime, standDownIfProxied) {
     runtime.clearNudgeTracking(sid);
     runtime.clearCompressRetryTracking(sid);
     runtime.dropHostUsageSamples(sid);
+    runtime.dropKhat(sid);
     runtime.dropSizeDivergence(sid);
     runtime.dropTerminalEscape(sid);
     runtime.dropTruncationSkipped(sid);
@@ -24093,11 +24188,16 @@ function wireContextTransform(pi, runtime, standDownIfProxied) {
         armedFloor = Math.floor(config.modelContextLimit * 0.95);
         logWarn("overflow-selfheal", { sid, event: "armed-emergency", floor: armedFloor, limit: config.modelContextLimit });
       }
-      const { predates, netReclaimed } = compressionAnchorStaleness(entries, state.blocks, defaultCountTokens);
-      const realPromptTokens = realUsage?.tokens ?? 0;
+      const { predates, netReclaimed, fresh, lastRealTokens } = compressionAnchorStaleness(entries, state.blocks, defaultCountTokens);
+      const reportedHost = realUsage?.tokens ?? 0;
+      const realPromptTokens = fresh || lastRealTokens <= 0 ? reportedHost : lastRealTokens;
+      if (!fresh && lastRealTokens > 0 && reportedHost > 0) {
+        logInfo("turn", { sid, event: "host-tree-sum-rejected", reported: reportedHost, flooredAt: lastRealTokens });
+      }
       const hostFloor = realPromptTokens > 0 ? Math.max(0, realPromptTokens - (predates ? netReclaimed : 0)) : 0;
-      const hostUsageStable = !predates && realPromptTokens > 0 ? runtime.noteHostUsage(sid, realPromptTokens) : false;
-      const calibrate = (base) => hostUsageStable ? Math.min(base, Math.ceil(realPromptTokens * 1.2)) : base;
+      const hostUsageStable = fresh && !predates && realPromptTokens > 0 ? runtime.noteHostUsage(sid, realPromptTokens) : false;
+      const khatReport = fresh && realPromptTokens > 0 ? runtime.noteKhatUsage(sid, modelId, realPromptTokens) : { khat: runtime.khatFor(sid, modelId), scaleChanged: false };
+      const calibrate = (base) => khatReport.khat !== null ? Math.ceil(base * khatReport.khat) : hostUsageStable ? Math.min(base, Math.ceil(realPromptTokens * 1.2)) : base;
       const applyFloors = (base) => Math.max(calibrate(base), hostFloor, armedFloor);
       const guardBasis = (base) => Math.max(calibrate(base), hostFloor);
       let tokenCount = applyFloors(sentTokens);
@@ -24120,11 +24220,12 @@ function wireContextTransform(pi, runtime, standDownIfProxied) {
         }
       }
       ov.noteSentView(guardTokens, config.modelContextLimit);
-      const sizeDivergent = !predates && realPromptTokens > 0 && Math.abs(tokenCount - realPromptTokens) / realPromptTokens > 0.5;
+      const sizeDivergent = fresh && !predates && realPromptTokens > 0 && Math.abs(tokenCount - realPromptTokens) / realPromptTokens > 0.5;
       if (runtime.noteSizeDivergence(sid, sizeDivergent)) {
         logWarn("turn", { sid, event: "size-divergence", est: tokenCount, host: realPromptTokens, ratio: Number((tokenCount / realPromptTokens).toFixed(2)), stable: hostUsageStable });
       }
-      if (runtime.noteTokenScale(sid, hostFloor <= sentTokens)) {
+      const estFlipped = runtime.noteTokenScale(sid, hostFloor, calibrate(sentTokens));
+      if (khatReport.scaleChanged || estFlipped) {
         state.nudge.lastNudgeShownTokens = state.nudge.lastNudgeShownTokens > 0 ? tokenCount : 0;
         state.nudge.lastPerMessageNudgeTokens = state.nudge.lastPerMessageNudgeTokens > 0 ? tokenCount : 0;
         const reanchored = {};
@@ -24133,7 +24234,7 @@ function wireContextTransform(pi, runtime, standDownIfProxied) {
         }
         state.nudge.lastShownByTier = reanchored;
         runtime.clearNudgeTokenStamps(sid);
-        logInfo("growth-scale", { sid, event: "scale-flip-reanchor", estScaleWins: hostFloor <= sentTokens, predates, tokenCount });
+        logInfo("growth-scale", { sid, event: "scale-flip-reanchor", source: khatReport.scaleChanged ? "khat" : "dead-band", khat: khatReport.khat, estScaleWins: sentTokens >= hostFloor, predates, hostFloor, sentTokens, tokenCount });
       }
       debug.event("context-in", {
         sid,
@@ -24150,13 +24251,15 @@ function wireContextTransform(pi, runtime, standDownIfProxied) {
       const turn = runtime.core.processTurn({ messages: coreMessages, state, config, tokenCount });
       await runtime.save(turn.state, ctx);
       const truncateBand = config.modelContextLimit > 0 ? Math.floor(config.truncate.threshold * config.modelContextLimit) : Number.MAX_SAFE_INTEGER;
+      const sentViewTokens = estimateTokens(turn.messages, collectCoveredMessageIds(turn.state), imageTokens) + systemPromptTokens;
       runtime.noteSentViewCount(sid, {
-        viewTokens: estimateTokens(turn.messages, collectCoveredMessageIds(turn.state), imageTokens) + systemPromptTokens,
+        viewTokens: sentViewTokens,
         blocksLen: turn.state.blocks.length,
         activeBlocks: turn.state.blocks.filter((b2) => b2.active).length,
         limit: config.modelContextLimit,
         usable: tokenCount < truncateBand
       });
+      if (tokenCount < truncateBand) runtime.setKhatPending(sid, modelId, sentViewTokens);
       if (turn.terminalEscape) {
         if (runtime.noteTerminalEscape(sid, true)) {
           logWarn("overflow", {

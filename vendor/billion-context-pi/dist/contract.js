@@ -1,7 +1,7 @@
 import {
   SIDECAR_SCHEMA_VERSION,
   sidecarProducer
-} from "./chunk-LLFL3CNI.js";
+} from "./chunk-TCNGKF5D.js";
 export {
   SIDECAR_SCHEMA_VERSION,
   sidecarProducer
